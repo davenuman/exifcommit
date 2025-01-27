@@ -107,9 +107,13 @@ func parseCommitFile(fileName string) bool {
 	fileScan.Scan()
 	newDescription := fileScan.Text()
 	fmt.Println("New Description:", newDescription)
+	if len(newDescription) < 1 {
+		fmt.Println("No new description. Aborting.")
+		return false
+	}
 
-	var splits []string
 	// Scan for the target files.
+	var splits []string
 	r := regexp.MustCompile(`file: `)
 	for fileScan.Scan() {
 		splits = r.Split(fileScan.Text(), 2)
@@ -117,14 +121,9 @@ func parseCommitFile(fileName string) bool {
 			targetFiles = append(targetFiles, splits[1])
 		}
 	}
-
 	if len(targetFiles) < 1 {
 		fmt.Println("No target files. Aborting.")
-		os.Exit(1)
-	}
-	if len(newDescription) < 1 {
-		fmt.Println("No new description. Aborting.")
-		os.Exit(1)
+		return false
 	}
 
 	writeExif(targetFiles, newDescription)
@@ -203,5 +202,8 @@ func main() {
 	defer os.Remove(tmpFile.Name())
 
 	// Parse after editing
-	parseCommitFile(tmpFile.Name())
+	result := parseCommitFile(tmpFile.Name())
+	if !result {
+		os.Exit(1)
+	}
 }
