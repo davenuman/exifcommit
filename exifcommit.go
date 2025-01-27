@@ -2,7 +2,6 @@ package main
 
 import (
 	"bufio"
-	"bytes"
 	"fmt"
 	"log"
 	"os"
@@ -10,9 +9,7 @@ import (
 	"path/filepath"
 	"regexp"
 
-	exif "github.com/dsoprea/go-exif/v3"
-	exifcommon "github.com/dsoprea/go-exif/v3/common"
-	jis "github.com/dsoprea/go-jpeg-image-structure/v2"
+	exiftool "github.com/barasher/go-exiftool"
 )
 
 const exifLabel = "ImageDescription"
@@ -23,116 +20,83 @@ func checkErr(err error) {
 	}
 }
 
+// Just print the error and continue
+func ignoreErr(err error) {
+	if err != nil {
+		fmt.Printf("Warning: %v\n", err)
+	}
+}
+
 // Read the current value of the tag in the targetFile.
 func readTag(targetFile string) string {
-	// fmt.Printf("attempting EXIF on file <%s> tag [%s]\n", targetFile, tagValue)
-
-	// jmp := NewJpegMediaParser()
-	rawExif, err := exif.SearchFileAndExtractExif(targetFile)
-	checkErr(err)
-
-	im, err := exifcommon.NewIfdMappingWithStandard()
-	checkErr(err)
-
-	ti := exif.NewTagIndex()
-
-	_, index, err := exif.Collect(im, ti, rawExif)
-	checkErr(err)
-
-	tagName := exifLabel
-
-	rootIfd := index.RootIfd
-
-	// We know the tag we want is on IFD0 (the first/root IFD).
-	results, err := rootIfd.FindTagWithName(tagName)
-	checkErr(err)
-
-	// This should never happen.
-	if len(results) != 1 {
-		log.Panicf("there wasn't exactly one result")
+	et, err := exiftool.NewExiftool()
+	if err != nil {
+		fmt.Printf("Error when intializing: %v\n", err)
+		return "not found"
 	}
-	ite := results[0]
+	defer et.Close()
 
-	valueRaw, err := ite.Value()
-	checkErr(err)
+	metadata := et.ExtractMetadata(targetFile)
+	value, err := metadata[0].GetString(exifLabel)
+	if err != nil {
+		// Not really an error.
+		return "not found"
+	}
+	err = et.Close()
+	ignoreErr(err)
 
-	value := valueRaw.(string)
-	fmt.Println(value)
+	// fmt.Printf("found: %v\n", value)
 	return value
 }
 
-// We do this not because it is easy...
+// This function doesn't work. It results in the following error:
+// error while closing exiftool: [error while waiting for exiftool to exit: exit status 1]
+// So we are using writeExif instead.
 func writeTag(targetFile string, newDescription string) bool {
-	rawExif, err := exif.SearchFileAndExtractExif(targetFile)
-	checkErr(err)
-
-	im, err := exifcommon.NewIfdMappingWithStandard()
-	checkErr(err)
-
-	ti := exif.NewTagIndex()
-
-	_, index, err := exif.Collect(im, ti, rawExif)
-	checkErr(err)
-
-	rootIfd := index.RootIfd
-
-	// We know the tag we want is on IFD0 (the first/root IFD).
-	results, err := rootIfd.FindTagWithName(exifLabel)
-	checkErr(err)
-
-	// This should never happen.
-	if len(results) != 1 {
-		log.Panicf("there wasn't exactly one result")
-	}
-	ite := results[0]
-
-	valueRaw, err := ite.Value()
-	checkErr(err)
-
-	value := valueRaw.(string)
-	fmt.Println(value)
-
-	// jpegstructure method
-
 	fmt.Printf("attempting EXIF on file <%s> tag [%s]\n", targetFile, newDescription)
 
-	jmp := jis.NewJpegMediaParser()
+	// et, err := exiftool.NewExiftool(exiftool.BackupOriginal())
+	et, err := exiftool.NewExiftool(exiftool.ClearFieldsBeforeWriting())
+	ignoreErr(err)
+	defer et.Close()
 
-	intfc, err := jmp.ParseFile(targetFile)
-	checkErr(err)
+	metadata := et.ExtractMetadata(targetFile)
 
-	sl := intfc.(*jis.SegmentList)
-	// sl.Print()
+	metadata[0].SetString(exifLabel, newDescription)
+	// metadata[0].SetString("ISO", "190")
+	et.WriteMetadata(metadata)
+	err = et.Close()
+	ignoreErr(err)
 
-	// Update the tag.
-
-	rootIb, err := sl.ConstructExifBuilder()
-	checkErr(err)
-	fmt.Println("does not get this far.")
-
-	ifdPath := "IFD0"
-
-	ifdIb, err := exif.GetOrCreateIbFromRootIb(rootIb, ifdPath)
-	checkErr(err)
-
-	fmt.Println(ifdIb)
-	err = ifdIb.SetStandardWithName(exifLabel, newDescription)
-	checkErr(err)
-
-	// Update the exif segment.
-
-	err = sl.SetExif(rootIb)
-	checkErr(err)
-
-	b := new(bytes.Buffer)
-
-	err = sl.Write(b)
-	checkErr(err)
+	altered := et.ExtractMetadata(targetFile)
+	testTag, err := altered[0].GetString(exifLabel)
+	ignoreErr(err)
+	fmt.Println("altered:" + testTag)
 
 	return true
 }
 
-func parseCommitFile(fileName string) {
+func writeExif(targetFiles []string, newDescription string) bool {
+	etArgs := append([]string{fmt.Sprintf(`-%s=%s`, exifLabel, newDescription)}, targetFiles...)
+
+	cmd := exec.Command("exiftool", etArgs...)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Run()
+
+	// exiftool -delete_original! ${targetFiles}
+	delArgs := append([]string{"-delete_original!"}, targetFiles...)
+	deleteCmd := exec.Command("exiftool", delArgs...)
+	deleteCmd.Stdin = os.Stdin
+	deleteCmd.Stdout = os.Stdout
+	deleteCmd.Stderr = os.Stderr
+	deleteCmd.Run()
+
+	return true
+}
+
+func parseCommitFile(fileName string) bool {
 	var targetFiles []string
 	file, err := os.Open(fileName)
 	checkErr(err)
@@ -154,11 +118,21 @@ func parseCommitFile(fileName string) {
 		}
 	}
 
-	for _, tf := range targetFiles {
-		writeTag(tf, newDescription)
+	if len(targetFiles) < 1 {
+		fmt.Println("No target files. Aborting.")
+		os.Exit(1)
+	}
+	if len(newDescription) < 1 {
+		fmt.Println("No new description. Aborting.")
+		os.Exit(1)
 	}
 
-	// TODO: Process EXIF change
+	writeExif(targetFiles, newDescription)
+	// for _, tf := range targetFiles {
+	// 	writeTag(tf, newDescription)
+	// }
+
+	return true
 }
 
 func main() {
@@ -173,7 +147,6 @@ func main() {
 		fmt.Println("Search term:")
 		fmt.Scanln(&searchTerm)
 	}
-	fmt.Printf("Searching [%s]\n", searchTerm)
 
 	// Search Paths
 	searchPaths := []string{"."}
@@ -185,6 +158,11 @@ func main() {
 	for _, searchPath := range searchPaths {
 		matches, _ := filepath.Glob(fmt.Sprintf("%s/*%s*", searchPath, searchTerm))
 		fileList = append(fileList, matches...)
+	}
+
+	if len(fileList) < 1 {
+		fmt.Println("No files found. Aborting.")
+		os.Exit(1)
 	}
 
 	// Create temp file and open to write
@@ -202,7 +180,7 @@ func main() {
 	// Add list of files
 	var description string
 	for _, fn := range fileList {
-		// TODO: Read current EXIF tag
+		// Read current EXIF tag
 		description = readTag(fn)
 		commitMessage += fmt.Sprintf("\n# file: %s\n%s", fn, description)
 	}
@@ -221,9 +199,9 @@ func main() {
 	cmd.Stderr = os.Stderr
 	cmd.Run()
 
+	// Remove tmp file
+	defer os.Remove(tmpFile.Name())
+
 	// Parse after editing
 	parseCommitFile(tmpFile.Name())
-
-	// Remove tmp file
-	os.Remove(tmpFile.Name())
 }
