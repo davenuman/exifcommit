@@ -49,10 +49,10 @@ Replace `<search_term>` with a term to search for in filenames. `exifcommit` wil
 
 **Example:**
 
-To update the `ImageDescription` tag for all `.jpg` files in the current directory and its subdirectories, you could use:
+To update the `ImageDescription` tag for all files with `123` in the filename in the current directory and its subdirectories, you could use:
 
 ```bash
-exifcommit jpg
+exifcommit 123
 ```
 
 ### Workflow
@@ -64,7 +64,7 @@ exifcommit jpg
     *   **Empty Description:** If you leave the first line empty or delete its content, `exifcommit` will abort and no changes will be made.
     *   **File List:** The file contains a list of the files found, each preceded by `# file: <filepath>`. Below each file path, the current `ImageDescription` tag (if it exists) is displayed. Lines starting with `#` are treated as comments and are ignored during parsing, except for the `# file:` lines which identify the target file paths.
     *   **Modify Files:** To apply the new `ImageDescription` to a file, ensure the line starting with `# file: ...` for that file remains in the file and is not commented out.
-    *   **Exclude Files:** To exclude a file from being modified, you can either **delete the entire line** starting with `# file: ...` or simply **comment it out** by adding another `#` at the beginning, making it `## file: ...`.
+    *   **Exclude Files:** To exclude a file from being modified, you can **delete the entire line** starting with `# file: ...`.
 4.  **Save and Close Editor:** Save the changes in your text editor and close the editor.
 5.  **Apply Changes:** `exifcommit` parses the temporary file. If a new description is provided and file lines are present, it uses `exiftool` to update the `ImageDescription` tag for the listed files using the provided description.
 6.  **Cleanup:** The temporary commit file is automatically deleted after processing.
@@ -102,11 +102,11 @@ Let's say you want to add the description "Photos from my vacation in Hawaii" to
 2.  **Run `exifcommit`:**
 
     ```bash
-    exifcommit Hawaii.jpg
+    exifcommit Hawaii
     ```
 
     This will:
-    *   Search for files with "Hawaii.jpg" in their name within `~/Pictures` and the current directory.
+    *   Search for files with "Hawaii" in their name within `~/Pictures` and the current directory.
     *   Create a temporary file and open it in your editor. The file might look something like this (contents are illustrative):
 
         ```
@@ -115,17 +115,17 @@ Let's say you want to add the description "Photos from my vacation in Hawaii" to
         #
         # Files to be modified, and their current value
         # (remove to exclude from editing):
-        # file: /home/user/Pictures/Hawaii/beach1.jpg
+        # file: /home/user/Pictures/Hawaii-beach1.jpg
         # current description of beach1.jpg
-        # file: /home/user/Pictures/Hawaii/beach2.jpg
+        # file: /home/user/Pictures/Hawaii-beach2.jpg
         # another description
-        # file: /home/user/Pictures/Hawaii/sunset.jpg
+        # file: /home/user/Pictures/Hawaii-sunset.jpg
         # not found
         ```
 
 3.  **Edit the Commit File:**
     *   On the **first line**, type in the new description: `Photos from my vacation in Hawaii`
-    *   Review the file list. If you want to exclude `beach2.jpg` from being modified, you can either delete the line `# file: /home/user/Pictures/Hawaii/beach2.jpg` or comment it out like `## file: /home/user/Pictures/Hawaii/beach2.jpg`.
+    *   Review the file list. If you want to exclude `beach2.jpg` from being modified, you can delete the line `# file: /home/user/Pictures/Hawaii/beach2.jpg`.
     *   The file should now look like this (if you kept all files and added the description):
 
         ```
@@ -135,16 +135,16 @@ Let's say you want to add the description "Photos from my vacation in Hawaii" to
         #
         # Files to be modified, and their current value
         # (remove to exclude from editing):
-        # file: /home/user/Pictures/Hawaii/beach1.jpg
+        # file: /home/user/Pictures/Hawaii-beach1.jpg
         # current description of beach1.jpg
-        # file: /home/user/Pictures/Hawaii/beach2.jpg
+        # file: /home/user/Pictures/Hawaii-beach2.jpg
         # another description
-        # file: /home/user/Pictures/Hawaii/sunset.jpg
+        # file: /home/user/Pictures/Hawaii-sunset.jpg
         # not found
         ```
 
 4.  **Save and Close:** Save the file and close your editor.
-5.  **Verification:** `exifcommit` will now apply the "Photos from my vacation in Hawaii" description to `beach1.jpg` and `sunset.jpg` (and `beach2.jpg` if you didn't exclude it). You can verify the changes using an EXIF viewer or by running `exifcommit` again to check the current descriptions.
+5.  **Verification:** `exifcommit` will now apply the "Photos from my vacation in Hawaii" description to `Hawaii-beach1.jpg` and `Hawaii-sunset.jpg` (and `Hawaii-beach2.jpg` if you didn't exclude it). You can verify the changes using an EXIF viewer or by running `exifcommit` again to check the current descriptions.
 
 **Important Notes:**
 
@@ -152,4 +152,4 @@ Let's say you want to add the description "Photos from my vacation in Hawaii" to
 *   **Error Handling:** `exifcommit` provides basic error handling and will print warnings or error messages to the console if issues occur. Check the output for any potential problems.
 *   **`exiftool` Compatibility:**  Ensure that `exiftool` is functioning correctly on your system independently before using `exifcommit`.
 
-This README provides a comprehensive guide to installing and using `exifcommit`. Enjoy tagging your images!
+Enjoy tagging your images!
